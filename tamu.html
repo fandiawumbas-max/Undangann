@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Buat Link Tamu Undangan</title>
+<style>
+  :root { --bg:#faf7f2; --card:#fff; --ink:#2b2622; --muted:#7a7068; --accent:#8a5a44; --line:#e7dfd5; --ok:#1f8f4e; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height:1.5; }
+  .wrap { max-width:640px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:1.4rem; margin:8px 0 4px; }
+  p.sub { margin:0 0 20px; color:var(--muted); font-size:.95rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-weight:600; font-size:.9rem; margin-bottom:6px; }
+  small { color:var(--muted); display:block; margin-top:6px; }
+  input, textarea { width:100%; font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); }
+  textarea { min-height:140px; resize:vertical; }
+  textarea.short { min-height:110px; }
+  button { font:inherit; cursor:pointer; border:0; border-radius:10px; padding:10px 14px; font-weight:600; }
+  .primary { background:var(--accent); color:#fff; width:100%; padding:13px; font-size:1rem; }
+  .ghost { background:#f1ebe3; color:var(--ink); }
+  .wa { background:#25d366; color:#fff; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .item { border-top:1px solid var(--line); padding:12px 0; }
+  .item:first-child { border-top:0; }
+  .name { font-weight:700; }
+  .link { font-size:.8rem; color:var(--muted); word-break:break-all; margin-top:2px; }
+  .toolbar { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px; }
+  .count { color:var(--muted); font-size:.9rem; }
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#222; color:#fff; padding:10px 16px; border-radius:999px; font-size:.9rem; opacity:0; pointer-events:none; transition:opacity .2s; }
+  .toast.show { opacity:1; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Buat Link Tamu Undangan</h1>
+  <p class="sub">Ketik nama tamu, satu nama per baris. Setiap tamu mendapat link sendiri dengan namanya.</p>
+
+  <div class="card">
+    <label for="base">Link undangan</label>
+    <input id="base" type="url" value="https://fandiawumbas-max.github.io/Undangann/" inputmode="url" autocomplete="off">
+    <small>Alamat undangan Anda. Biasanya tidak perlu diubah.</small>
+  </div>
+
+  <div class="card">
+    <label for="names">Daftar nama tamu</label>
+    <textarea id="names" placeholder="Bapak Budi Santoso&#10;Ibu Siti &amp; Keluarga&#10;Saudara Andi"></textarea>
+    <small>Satu nama per baris. Boleh memakai gelar atau "&amp; Keluarga".</small>
+  </div>
+
+  <div class="card">
+    <label for="tpl">Isi pesan WhatsApp</label>
+    <textarea id="tpl" class="short"></textarea>
+    <small>Tulisan {nama} dan {link} akan diganti otomatis. Boleh diubah sesuka Anda.</small>
+  </div>
+
+  <button class="primary" id="go">Buat Link</button>
+
+  <div class="card hidden" id="out" style="margin-top:16px">
+    <div class="toolbar">
+      <span class="count" id="count"></span>
+      <button class="ghost" id="copyAll">Salin semua</button>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var DEFAULT_TPL =
+    "Kepada Yth.\n{nama}\n\nDengan segala hormat, kami mengundang Anda untuk hadir di acara resepsi pernikahan kami. Detail acara ada di undangan berikut:\n{link}\n\nMerupakan suatu kehormatan bagi kami apabila Anda berkenan hadir. Terima kasih.";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = "tamu-generator-v1";
+
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem(KEY) || "{}");
+      if (s.base) $("base").value = s.base;
+      if (s.names) $("names").value = s.names;
+      $("tpl").value = s.tpl || DEFAULT_TPL;
+    } catch (e) { $("tpl").value = DEFAULT_TPL; }
+    if (!$("tpl").value) $("tpl").value = DEFAULT_TPL;
+  }
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        base: $("base").value, names: $("names").value, tpl: $("tpl").value
+      }));
+    } catch (e) {}
+  }
+
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove("show"); }, 1600);
+  }
+
+  function copy(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { toast("Tersalin"); }, fallback);
+    }
+    fallback();
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); toast("Tersalin"); } catch (e) { toast("Gagal menyalin"); }
+      document.body.removeChild(ta);
+    }
+  }
+
+  function makeLink(base, name) {
+    var b = base.trim();
+    var sep = b.indexOf("?") === -1 ? "?" : "&";
+    return b + sep + "to=" + encodeURIComponent(name).replace(/%20/g, "+");
+  }
+
+  function makeMessage(name, link) {
+    return $("tpl").value.split("{nama}").join(name).split("{link}").join(link);
+  }
+
+  var current = [];
+
+  function render() {
+    var base = $("base").value.trim();
+    if (!/^https?:\/\//i.test(base)) { toast("Link undangan belum benar"); return; }
+    var names = $("names").value.split("\n").map(function (n) { return n.trim(); }).filter(Boolean);
+    if (!names.length) { toast("Isi nama tamu dulu"); return; }
+    save();
+
+    current = names.map(function (n) { return { name: n, link: makeLink(base, n) }; });
+    var list = $("list"); list.innerHTML = "";
+    current.forEach(function (it) {
+      var d = document.createElement("div"); d.className = "item";
+      var n = document.createElement("div"); n.className = "name"; n.textContent = it.name;
+      var l = document.createElement("div"); l.className = "link"; l.textContent = it.link;
+      var r = document.createElement("div"); r.className = "row";
+
+      var b1 = document.createElement("button"); b1.className = "ghost"; b1.textContent = "Salin link";
+      b1.onclick = function () { copy(it.link); };
+      var b2 = document.createElement("button"); b2.className = "ghost"; b2.textContent = "Salin pesan";
+      b2.onclick = function () { copy(makeMessage(it.name, it.link)); };
+      var b3 = document.createElement("button"); b3.className = "wa"; b3.textContent = "Kirim WhatsApp";
+      b3.onclick = function () {
+        window.open("https://wa.me/?text=" + encodeURIComponent(makeMessage(it.name, it.link)), "_blank");
+      };
+      r.appendChild(b1); r.appendChild(b2); r.appendChild(b3);
+      d.appendChild(n); d.appendChild(l); d.appendChild(r);
+      list.appendChild(d);
+    });
+    $("count").textContent = current.length + " tamu";
+    $("out").classList.remove("hidden");
+    $("out").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  $("go").onclick = render;
+  $("copyAll").onclick = function () {
+    copy(current.map(function (it) { return it.name + "\n" + it.link; }).join("\n\n"));
+  };
+  ["base", "names", "tpl"].forEach(function (id) { $(id).addEventListener("input", save); });
+  load();
+})();
+</script>
+</body>
+</html>
