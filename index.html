@@ -132,7 +132,7 @@ body.on #mu{display:grid}
   <div class="mono"><svg class="w" viewBox="0 0 200 200" aria-hidden="true"></svg><span>A&amp;R</span></div>
   <p style="font:italic 20px 'Cormorant Garamond',serif;margin:0">Undangan resepsi pernikahan</p>
   <div class="sc" style="color:#8f2f55;margin:2px 0 0">Ardin &amp; Rosmita</div>
-  <div class="guest">Kepada Yth.<b>Bapak/Ibu/Saudara/i</b></div>
+  <div class="guest">Kepada Yth.<b id="guestName">Bapak/Ibu/Saudara/i</b></div>
   <button class="btn" id="open">Buka undangan</button>
  </div>
 </div>
@@ -238,6 +238,20 @@ $('#send').onclick=()=>{
  $('#nm').value='';$('#ms').value='';
  $('#note').textContent='Terima kasih, ucapan Anda sudah masuk. Ini contoh, jadi belum tersimpan sungguhan.';
 };
+</script>
+<script>
+(function(){
+ try{
+  var n=new URLSearchParams(location.search).get('to');
+  if(!n)return;
+  n=n.replace(/\s+/g,' ').trim().slice(0,80);
+  if(!n)return;
+  var g=document.getElementById('guestName');
+  if(g)g.textContent=n;
+  var f=document.getElementById('nm');
+  if(f&&!f.value)f.value=n;
+ }catch(e){}
+})();
 </script>
 </body>
 </html>
